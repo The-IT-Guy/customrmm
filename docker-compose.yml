@@ -6,7 +6,8 @@ services:
     ports:
       - "8000:8000"
     environment:
-      RMM_SERVER_URL: "http://localhost:8000"
+      RMM_SERVER_URL=http://159.198.68.177:8000
       RMM_DB_PATH: "/data/customrmm.db"
     volumes:
+
       - ./data:/data
