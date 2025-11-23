@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Request, Form
+from fastapi import FastAPI, Depends, HTTPException, Request, Form
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -16,8 +16,8 @@ from sqlalchemy import (
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship, Session
 
 from passlib.hash import pbkdf2_sha256
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, timedelta
+from typing import Optional, List
 import os
 
 
@@ -46,6 +46,8 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
 SERVER_URL = os.environ.get("RMM_SERVER_URL", "http://localhost:8000")
+# For unattended access links (e.g., MeshCentral / RustDesk / Guacamole)
+REMOTE_BASE_URL = os.environ.get("RMM_REMOTE_BASE_URL", "")
 
 
 # ============ Models ============
@@ -60,7 +62,7 @@ class User(Base):
     role = Column(String(50), default="admin")
     is_active = Column(Boolean, default=True)
 
-    def verify(self, password):
+    def verify(self, password: str) -> bool:
         return pbkdf2_sha256.verify(password, self.password_hash)
 
 
@@ -114,20 +116,22 @@ class Ticket(Base):
 
 # ============ Database Init ============
 
-def init_db():
+def init_db() -> None:
+    """Create tables and a default admin user."""
     Base.metadata.create_all(bind=engine)
 
     db = SessionLocal()
-    if not db.query(User).filter_by(email="admin@local").first():
-        admin = User(
-            name="Admin",
-            email="admin@local",
-            password_hash=pbkdf2_sha256.hash("admin123"),
-        )
-        db.add(admin)
-        db.commit()
-
-    db.close()
+    try:
+        if not db.query(User).filter_by(email="admin@local").first():
+            admin = User(
+                name="Admin",
+                email="admin@local",
+                password_hash=pbkdf2_sha256.hash("admin123"),
+            )
+            db.add(admin)
+            db.commit()
+    finally:
+        db.close()
 
 
 init_db()
@@ -137,6 +141,7 @@ init_db()
 
 SESSION_COOKIE = "rmm_session"
 
+
 def get_db():
     db = SessionLocal()
     try:
@@ -145,7 +150,7 @@ def get_db():
         db.close()
 
 
-def current_user(request: Request, db: Session = Depends(get_db)):
+def current_user(request: Request, db: Session = Depends(get_db)) -> User:
     email = request.cookies.get(SESSION_COOKIE)
     if not email:
         raise HTTPException(status_code=401)
@@ -157,26 +162,93 @@ def current_user(request: Request, db: Session = Depends(get_db)):
     return user
 
 
+# ============ Helper Functions (Automation / Alerts) ============
+
+def compute_alerts_and_status(db: Session) -> List[dict]:
+    """
+    Simple "automation" engine:
+    - Marks agents offline if last_seen older than threshold.
+    - Builds an alerts list for the dashboard.
+    """
+    alerts: List[dict] = []
+    now = datetime.utcnow()
+    offline_threshold = now - timedelta(minutes=5)
+
+    agents = db.query(Agent).all()
+    for agent in agents:
+        if agent.last_seen is None:
+            continue
+
+        # Update status based on last_seen
+        if agent.last_seen < offline_threshold:
+            if agent.status != "offline":
+                agent.status = "offline"
+        else:
+            if agent.status != "online":
+                agent.status = "online"
+
+    db.commit()
+
+    # Build alert list for offline agents
+    offline_agents = db.query(Agent).filter_by(status="offline").all()
+    for a in offline_agents:
+        client_name = a.client.name if a.client else "Unknown client"
+        alerts.append(
+            {
+                "type": "Offline Agent",
+                "severity": "high",
+                "message": f"Agent {a.hostname} for {client_name} is offline.",
+                "agent_id": a.id,
+                "client_name": client_name,
+            }
+        )
+
+    return alerts
+
+
 # ============ UI Pages ============
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request, db: Session = Depends(get_db)):
+    # Auth check
     try:
         user = current_user(request, db)
-    except:
+    except HTTPException:
         return RedirectResponse("/login")
 
     clients = db.query(Client).order_by(Client.name).all()
     agents = db.query(Agent).order_by(Agent.id.desc()).all()
     tickets = db.query(Ticket).order_by(Ticket.created_at.desc()).all()
 
+    alerts = compute_alerts_and_status(db)
+
+    total_clients = len(clients)
+    total_agents = len(agents)
+    online_agents = len([a for a in agents if a.status == "online"])
+    offline_agents = len([a for a in agents if a.status != "online"])
+    open_tickets = len([t for t in tickets if t.status.lower() != "closed"])
+
+    summary = {
+        "total_clients": total_clients,
+        "total_agents": total_agents,
+        "online_agents": online_agents,
+        "offline_agents": offline_agents,
+        "open_tickets": open_tickets,
+        "alert_count": len(alerts),
+    }
+
     return templates.TemplateResponse(
         "dashboard.html",
         {
             "request": request,
+            "user": user,
             "clients": clients,
             "agents": agents,
             "tickets": tickets,
+            "alerts": alerts,
+            "summary": summary,
+            "server_url": SERVER_URL,
+            "remote_base_url": REMOTE_BASE_URL,
         },
     )
 
@@ -190,6 +262,7 @@ def login_page(request: Request):
 def login(email: str = Form(), password: str = Form(), db: Session = Depends(get_db)):
     user = db.query(User).filter_by(email=email).first()
     if not user or not user.verify(password):
+        # Redirect back to login on failure
         return RedirectResponse("/login", status_code=302)
 
     resp = RedirectResponse("/", status_code=302)
@@ -219,7 +292,7 @@ def add_client(
     current_user(request, db)
 
     if db.query(Client).filter_by(name=name).first():
-        raise HTTPException(400, "Client exists")
+        raise HTTPException(400, "Client already exists")
 
     c = Client(
         name=name,
@@ -273,21 +346,40 @@ def add_ticket(
     return RedirectResponse("/", status_code=302)
 
 
-# ============ Agent API ============
+@app.post("/tickets/update/{ticket_id}")
+def update_ticket(
+    ticket_id: int,
+    status_value: str = Form(...),
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    current_user(request, db)
+
+    t = db.query(Ticket).get(ticket_id)
+    if not t:
+        raise HTTPException(404)
+
+    t.status = status_value
+    t.updated_at = datetime.utcnow()
+    db.commit()
+    return RedirectResponse("/", status_code=302)
+
+
+# ============ Agent API (for installers / automation) ============
 
 @app.post("/api/agents/register")
 def agent_register(
-    client_name: str,
-    hostname: str,
-    os_name: str,
-    os_version: str,
-    ip_address: str,
-    agent_version: str = "0.1.0",
+    client_name: str = Form(...),
+    hostname: str = Form(...),
+    os_name: str = Form(...),
+    os_version: str = Form(...),
+    ip_address: str = Form(...),
+    agent_version: str = Form("0.1.0"),
     db: Session = Depends(get_db),
 ):
     client = db.query(Client).filter_by(name=client_name).first()
     if not client:
-        raise HTTPException(404)
+        raise HTTPException(404, "Client not found")
 
     a = Agent(
         client_id=client.id,
@@ -306,10 +398,10 @@ def agent_register(
 
 
 @app.post("/api/agents/heartbeat/{agent_id}")
-def agent_heartbeat(agent_id: int, ip_address: str, db: Session = Depends(get_db)):
+def agent_heartbeat(agent_id: int, ip_address: str = Form(...), db: Session = Depends(get_db)):
     a = db.query(Agent).get(agent_id)
     if not a:
-        raise HTTPException(404)
+        raise HTTPException(404, "Agent not found")
 
     a.ip_address = ip_address
     a.last_seen = datetime.utcnow()
@@ -319,21 +411,45 @@ def agent_heartbeat(agent_id: int, ip_address: str, db: Session = Depends(get_db
     return {"status": "ok"}
 
 
-# ============ Installers ============
+@app.get("/api/agents")
+def list_agents(db: Session = Depends(get_db)):
+    agents = db.query(Agent).all()
+    results = []
+    for a in agents:
+        results.append(
+            {
+                "id": a.id,
+                "client": a.client.name if a.client else None,
+                "hostname": a.hostname,
+                "os_name": a.os_name,
+                "os_version": a.os_version,
+                "ip_address": a.ip_address,
+                "last_seen": a.last_seen.isoformat() if a.last_seen else None,
+                "status": a.status,
+                "agent_version": a.agent_version,
+            }
+        )
+    return results
+
+
+# ============ Installers (Windows / Linux / macOS) ============
 
 @app.get("/install/windows/{client_name}", response_class=PlainTextResponse)
 def windows_installer(client_name: str):
-    script = f"""# Windows RMM Installer
-$server = "{SERVER_URL}"
-$client = "{client_name}"
+    script = f"""# Windows RMM Installer (PowerShell)
+$Server = "{SERVER_URL}"
+$ClientName = "{client_name}"
 
-# Install Python if missing (future)
-# Download agent
-$dest = "$env:ProgramData\\CustomRMM"
-New-Item -ItemType Directory -Force -Path $dest | Out-Null
-Invoke-WebRequest -Uri "$server/static/agent.py" -OutFile "$dest\\agent.py"
+$Dest = "$env:ProgramData\\CustomRMM"
+New-Item -ItemType Directory -Force -Path $Dest | Out-Null
 
-# Register
+$AgentUrl = "$Server/static/agent.py"
+$AgentPath = Join-Path $Dest "agent.py"
+
+Invoke-WebRequest -Uri $AgentUrl -OutFile $AgentPath
+
+# TODO: Add Python install & register as a Windows service
+Write-Host "Agent downloaded to $AgentPath"
 """
     return script
 
@@ -342,20 +458,34 @@ Invoke-WebRequest -Uri "$server/static/agent.py" -OutFile "$dest\\agent.py"
 def linux_installer(client_name: str):
     script = f"""#!/usr/bin/env bash
 SERVER="{SERVER_URL}"
-CLIENT="{client_name}"
+CLIENT_NAME="{client_name}"
 
 sudo mkdir -p /opt/customrmm
-sudo curl -sS "$SERVER/static/agent.py" -o /opt/customrmm/agent.py
+sudo curl -fsSL "$SERVER/static/agent.py" -o /opt/customrmm/agent.py
 sudo chmod +x /opt/customrmm/agent.py
 
-echo "Linux installer done."
+echo "Agent downloaded to /opt/customrmm/agent.py"
+"""
+    return script
+
+
+@app.get("/install/macos/{client_name}", response_class=PlainTextResponse)
+def macos_installer(client_name: str):
+    script = f"""#!/usr/bin/env bash
+SERVER="{SERVER_URL}"
+CLIENT_NAME="{client_name}"
+
+mkdir -p "$HOME/CustomRMM"
+curl -fsSL "$SERVER/static/agent.py" -o "$HOME/CustomRMM/agent.py"
+chmod +x "$HOME/CustomRMM/agent.py"
+
+echo "Agent downloaded to $HOME/CustomRMM/agent.py"
 """
     return script
 
 
 # ============ Health Check ============
 
-@app.get("/health")
+@app.get("/health", response_class=PlainTextResponse)
 def health():
-
     return "ok"
