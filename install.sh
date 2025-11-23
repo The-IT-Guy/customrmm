@@ -8,7 +8,7 @@ echo "========================================="
 echo "      Custom RMM - Installer Script"
 echo "========================================="
 
-# Ensure we are root or sudo available
+# Ensure we are root or have sudo
 if [ "$EUID" -ne 0 ]; then
     SUDO="sudo"
 else
@@ -39,8 +39,6 @@ cd "$INSTALL_DIR"
 echo "[5/6] Building and launching Docker container..."
 $SUDO docker compose down || true
 $SUDO docker compose up -d --build
-
-echo "[6/6] Done!"
 
 IP=$(hostname -I | awk '{print $1}')
 
