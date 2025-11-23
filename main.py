@@ -15,7 +15,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship, Session
 
-from passlib.hash import bcrypt
+from passlib.hash import pbkdf2_sha256
 from datetime import datetime
 from typing import Optional
 import os
@@ -61,7 +61,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
 
     def verify(self, password):
-        return bcrypt.verify(password, self.password_hash)
+        return pbkdf2_sha256.verify(password, self.password_hash)
 
 
 class Client(Base):
@@ -122,7 +122,7 @@ def init_db():
         admin = User(
             name="Admin",
             email="admin@local",
-            password_hash=bcrypt.hash("admin123"),
+            password_hash=pbkdf2_sha256.hash("admin123"),
         )
         db.add(admin)
         db.commit()
@@ -357,4 +357,5 @@ echo "Linux installer done."
 
 @app.get("/health")
 def health():
+
     return "ok"
