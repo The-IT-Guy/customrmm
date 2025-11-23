@@ -446,10 +446,27 @@ New-Item -ItemType Directory -Force -Path $Dest | Out-Null
 $AgentUrl = "$Server/static/agent.py"
 $AgentPath = Join-Path $Dest "agent.py"
 
+Write-Host "Downloading agent from $AgentUrl to $AgentPath..."
 Invoke-WebRequest -Uri $AgentUrl -OutFile $AgentPath
 
-# TODO: Add Python install & register as a Windows service
-Write-Host "Agent downloaded to $AgentPath"
+# Set environment for this session
+$env:RMM_SERVER_URL = $Server
+$env:RMM_CLIENT_NAME = $ClientName
+
+Write-Host "Starting agent..."
+# Try python3 then python
+$python = (Get-Command python3 -ErrorAction SilentlyContinue) `
+       ?? (Get-Command python -ErrorAction SilentlyContinue)
+
+if (-not $python) {{
+    Write-Host "ERROR: Python is not installed or not on PATH."
+    Write-Host "Please install Python 3 and re-run this command."
+    exit 1
+}}
+
+Start-Process -NoNewWindow -FilePath $python.Source -ArgumentList "`"$AgentPath`""
+
+Write-Host "Agent downloaded to $AgentPath and started."
 """
     return script
 
@@ -489,3 +506,4 @@ echo "Agent downloaded to $HOME/CustomRMM/agent.py"
 @app.get("/health", response_class=PlainTextResponse)
 def health():
     return "ok"
+
