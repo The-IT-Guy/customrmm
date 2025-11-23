@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>RMM Dashboard</title>
+
+    <style>
+        body {
+            background: #111;
+            color: #eee;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        header {
+            background: #222;
+            padding: 15px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #333;
+        }
+
+        header h1 {
+            margin: 0;
+        }
+
+        .logout-link {
+            color: #ff6666;
+            text-decoration: none;
+            font-size: 16px;
+            padding: 8px 12px;
+            border: 1px solid #ff6666;
+            border-radius: 4px;
+        }
+
+        .wrapper {
+            padding: 20px;
+        }
+
+        .section-title {
+            margin-top: 30px;
+            margin-bottom: 10px;
+            font-size: 22px;
+            border-bottom: 1px solid #444;
+            padding-bottom: 5px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #222;
+            margin-bottom: 30px;
+        }
+
+        th, td {
+            padding: 10px;
+            border-bottom: 1px solid #333;
+        }
+
+        th {
+            background: #333;
+        }
+
+        .btn {
+            padding: 6px 10px;
+            background: #4CAF50;
+            border: none;
+            border-radius: 4px;
+            color: #fff;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
+        }
+
+        .btn-delete {
+            background: #ff4444;
+        }
+
+        .form-inline input {
+            padding: 8px;
+            width: 200px;
+            margin-right: 10px;
+        }
+
+        .form-inline button {
+            padding: 8px 14px;
+        }
+    </style>
+</head>
+
+<body>
+<header>
+    <h1>RMM Dashboard</h1>
+
+    <a href="/logout" class="logout-link">Logout</a>
+</header>
+
+<div class="wrapper">
+
+    <!-- ==================== CLIENTS ==================== -->
+    <h2 class="section-title">Clients</h2>
+
+    <form class="form-inline" method="post" action="/clients/add">
+        <input type="text" name="name" placeholder="Client Name" required />
+        <input type="text" name="contact_name" placeholder="Contact Name" />
+        <input type="email" name="contact_email" placeholder="Contact Email" />
+        <input type="text" name="contact_phone" placeholder="Phone" />
+        <button class="btn" type="submit">Add Client</button>
+    </form>
+
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Contact</th>
+            <th>Notes</th>
+            <th>Actions</th>
+        </tr>
+
+        {% for c in clients %}
+        <tr>
+            <td>{{ c.id }}</td>
+            <td>{{ c.name }}</td>
+            <td>
+                {{ c.contact_name }}<br>
+                {{ c.contact_email }}<br>
+                {{ c.contact_phone }}
+            </td>
+            <td>{{ c.notes }}</td>
+            <td>
+                <form method="post" action="/clients/delete/{{ c.id }}">
+                    <button class="btn btn-delete" type="submit">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+
+
+    <!-- ==================== AGENTS ==================== -->
+    <h2 class="section-title">Agents</h2>
+
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Client</th>
+            <th>Hostname</th>
+            <th>OS</th>
+            <th>IP</th>
+            <th>Status</th>
+            <th>Last Seen</th>
+            <th>Version</th>
+        </tr>
+
+        {% for a in agents %}
+        <tr>
+            <td>{{ a.id }}</td>
+            <td>{{ a.client.name }}</td>
+            <td>{{ a.hostname }}</td>
+            <td>{{ a.os_name }} {{ a.os_version }}</td>
+            <td>{{ a.ip_address }}</td>
+            <td>{{ a.status }}</td>
+            <td>{{ a.last_seen }}</td>
+            <td>{{ a.agent_version }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+
+
+    <!-- ==================== TICKETS ==================== -->
+    <h2 class="section-title">Tickets</h2>
+
+    <form class="form-inline" method="post" action="/tickets/add">
+        <input type="text" name="title" placeholder="Ticket Title" required />
+        <input type="text" name="description" placeholder="Description" required />
+        <input type="number" name="client_id" placeholder="Client ID (optional)" />
+        <input type="number" name="agent_id" placeholder="Agent ID (optional)" />
+        <button class="btn" type="submit">Add Ticket</button>
+    </form>
+
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Client</th>
+            <th>Agent</th>
+            <th>Title</th>
+            <th>Description</th>
+            <th>Status</th>
+            <th>Priority</th>
+            <th>Created</th>
+            <th>Updated</th>
+        </tr>
+
+        {% for t in tickets %}
+        <tr>
+            <td>{{ t.id }}</td>
+            <td>{% if t.client %}{{ t.client.name }}{% else %}-{% endif %}</td>
+            <td>{% if t.agent %}{{ t.agent.hostname }}{% else %}-{% endif %}</td>
+            <td>{{ t.title }}</td>
+            <td>{{ t.description }}</td>
+            <td>{{ t.status }}</td>
+            <td>{{ t.priority }}</td>
+            <td>{{ t.created_at }}</td>
+            <td>{{ t.updated_at }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+
+</div>
+
+</body>
+</html>

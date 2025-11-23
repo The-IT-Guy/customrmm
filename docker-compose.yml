@@ -1,0 +1,12 @@
+services:
+  customrmm:
+    build: .
+    container_name: customrmm
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      RMM_SERVER_URL: "http://localhost:8000"
+      RMM_DB_PATH: "/data/customrmm.db"
+    volumes:
+      - ./data:/data
