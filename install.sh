@@ -23,7 +23,7 @@ if ! grep -q "Ubuntu 22.04" /etc/os-release; then
 fi
 
 echo
-read -rp "Enter your RMM domain (e.g. nexivo.dev): " RMM_DOMAIN
+read -rp "Enter your RMM domain (https://nexivo.dev): " RMM_DOMAIN
 [[ -n "${RMM_DOMAIN}" ]] || { echo "Domain cannot be empty"; exit 1; }
 
 read -rp "Enter email for Let's Encrypt (for SSL): " LE_EMAIL
@@ -216,4 +216,5 @@ echo "  docker ps"
 echo "  docker logs customrmm-app"
 echo "  systemctl status customrmm.service"
 echo "  nginx -t && journalctl -u nginx"
+
 
