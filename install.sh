@@ -49,12 +49,16 @@ echo
 read -rp "Proceed with installation? [y/N]: " CONFIRM
 [[ "${CONFIRM,,}" == "y" ]] || { echo "Cancelled."; exit 1; }
 
+#############################################
+# System prep
+#############################################
+
 echo
 echo ">>> Updating system and installing base packages..."
-apt-get update -y
-DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+apt update -y
+DEBIAN_FRONTEND=noninteractive apt upgrade -y
 
-apt-get install -y \
+apt install -y \
   ca-certificates \
   curl \
   gnupg \
@@ -64,34 +68,27 @@ apt-get install -y \
   nginx \
   python3-certbot-nginx
 
+#############################################
+# Docker (from Ubuntu repo — no external GPG)
+#############################################
+
 echo
-echo ">>> Installing Docker & Docker Compose plugin..."
+echo ">>> Installing Docker & Docker Compose plugin (Ubuntu repo)..."
+
 if ! command -v docker >/dev/null 2>&1; then
-  install -m 0755 -d /etc/apt/keyrings
-  curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.gpg
-  chmod a+r /etc/apt/keyrings/docker.gpg
-
-  echo \
-    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-    $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
-    | tee /etc/apt/sources.list.d/docker.list >/dev/null
-
-  apt-get update -y
-  apt-get install -y \
-    docker-ce \
-    docker-ce-cli \
-    containerd.io \
-    docker-buildx-plugin \
-    docker-compose-plugin
-
+  apt install -y docker.io docker-compose-plugin
   systemctl enable --now docker
 else
   echo "Docker already installed, skipping."
 fi
 
 if ! docker compose version >/dev/null 2>&1; then
-  apt-get install -y docker-compose-plugin
+  apt install -y docker-compose-plugin
 fi
+
+#############################################
+# Firewall
+#############################################
 
 echo
 echo ">>> Configuring UFW firewall..."
@@ -101,6 +98,10 @@ ufw allow 443/tcp || true
 if ufw status | grep -q "Status: inactive"; then
   ufw --force enable
 fi
+
+#############################################
+# Clone / update repo
+#############################################
 
 echo
 echo ">>> Cloning or updating repo at ${REPO_DIR}..."
@@ -117,6 +118,10 @@ fi
 
 APP_DIR="${REPO_DIR}"
 
+#############################################
+# .env
+#############################################
+
 echo
 echo ">>> Creating .env (if missing)..."
 ENV_FILE="${APP_DIR}/.env"
@@ -129,20 +134,32 @@ SECRET_KEY=$(openssl rand -hex 32)
 DEBUG=false
 EOF
 else
-  echo ".env already exists, leaving it as-is. Make sure it has:"
-  echo "  RMM_SERVER_URL=https://${RMM_DOMAIN}"
-  echo "  RMM_DB_PATH=/app/data/customrmm.db"
+  echo ".env already exists; leaving as-is."
 fi
 
+#############################################
+# Docker build / up
+#############################################
+
 echo
-echo ">>> Building and starting Docker stack..."
+echo ">>> Building Docker image..."
 cd "${APP_DIR}"
+docker compose build
+
+echo
+echo ">>> Starting Docker stack..."
 docker compose up -d
 
 sleep 8
-docker ps | grep -q "customrmm-app" && \
-  echo "Docker app container is running." || \
-  echo "WARNING: customrmm-app container not running. Check 'docker logs customrmm-app'."
+if docker ps | grep -q "customrmm-app"; then
+  echo "customrmm-app container is running."
+else
+  echo "WARNING: customrmm-app container not found. Check: docker logs customrmm-app"
+fi
+
+#############################################
+# Nginx reverse proxy
+#############################################
 
 echo
 echo ">>> Configuring Nginx reverse proxy..."
@@ -173,14 +190,26 @@ rm -f /etc/nginx/sites-enabled/default || true
 nginx -t
 systemctl reload nginx
 
+#############################################
+# Let's Encrypt SSL
+#############################################
+
 echo
 echo ">>> Requesting Let's Encrypt certificate..."
-certbot --nginx \
-  -d "${RMM_DOMAIN}" \
-  -m "${LE_EMAIL}" \
-  --agree-tos \
-  --non-interactive \
-  --redirect || echo "Certbot failed – run it manually later if needed."
+if command -v certbot >/dev/null 2>&1; then
+  certbot --nginx \
+    -d "${RMM_DOMAIN}" \
+    -m "${LE_EMAIL}" \
+    --agree-tos \
+    --non-interactive \
+    --redirect || echo "Certbot failed – you can rerun it manually later."
+else
+  echo "Certbot not installed; skipping SSL."
+fi
+
+#############################################
+# systemd service for Docker stack
+#############################################
 
 echo
 echo ">>> Creating systemd service for CustomRMM..."
@@ -210,12 +239,8 @@ systemctl restart customrmm.service
 echo
 echo "=== Installation complete! ==="
 echo "Dashboard: https://${RMM_DOMAIN}"
+echo "If HTTP works but HTTPS doesn't yet, check DNS and rerun certbot:"
+echo "  certbot --nginx -d ${RMM_DOMAIN} -m ${LE_EMAIL} --agree-tos --redirect"
 echo
-echo "If something doesn't load, check:"
-echo "  docker ps"
-echo "  docker logs customrmm-app"
-echo "  systemctl status customrmm.service"
-echo "  nginx -t && journalctl -u nginx"
-
-
-
+echo "Logs:"
+echo "  docker logs customrmm-app --tail=100"
