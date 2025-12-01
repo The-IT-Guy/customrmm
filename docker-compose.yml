@@ -1,14 +1,16 @@
+version: "3.9"
+
 services:
-  customrmm:
+  app:
     build: .
-    container_name: customrmm
+    container_name: customrmm-app
     restart: unless-stopped
+    env_file:
+      - .env
     ports:
-      - "8000:8000"
-    environment:
-      RMM_SERVER_URL: "http://159.198.68.177:8000"
-      RMM_DB_PATH: "/data/customrmm.db"
+      - "127.0.0.1:8000:8000"
     volumes:
+      - customrmm-data:/app/data
 
-      - ./data:/data
-
+volumes:
+  customrmm-data:
