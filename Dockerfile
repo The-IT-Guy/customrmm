@@ -1,23 +1,17 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
-COPY main.py ./main.py
-COPY templates ./templates
-COPY static ./static
+COPY . /app
 
-RUN mkdir -p /data
-
-ENV RMM_DB_PATH=/data/customrmm.db
-ENV RMM_SERVER_URL=http://localhost:8000
+ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8000
 
