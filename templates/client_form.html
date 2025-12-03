@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+    <h2>{{ "New Client" if mode == "create" else "Edit Client" }}</h2>
+    <form method="post" action="{{ '/clients/create' if mode == 'create' else '/clients/' ~ client.id ~ '/update' }}">
+        <div class="form-field">
+            <label for="name">Name *</label>
+            <input id="name" name="name" required value="{{ client.name if client else '' }}">
+        </div>
+        <div class="form-field">
+            <label for="company">Company</label>
+            <input id="company" name="company" value="{{ client.company if client and client.company else '' }}">
+        </div>
+        <div class="form-field">
+            <label for="email">Email</label>
+            <input id="email" name="email" value="{{ client.email if client and client.email else '' }}">
+        </div>
+        <div class="form-field">
+            <label for="phone">Phone</label>
+            <input id="phone" name="phone" value="{{ client.phone if client and client.phone else '' }}">
+        </div>
+        <div class="form-field">
+            <label for="notes">Notes</label>
+            <textarea id="notes" name="notes" rows="3">{{ client.notes if client and client.notes else '' }}</textarea>
+        </div>
+        <div class="form-actions">
+            <button class="btn" type="submit">{{ "Create" if mode == "create" else "Save" }}</button>
+            <a href="{{ '/' if mode == 'create' else '/clients/' ~ client.id }}" class="btn">Cancel</a>
+        </div>
+    </form>
+    {% if mode == "edit" %}
+    <form class="inline" method="post" action="/clients/{{ client.id }}/delete" onsubmit="return confirm('Delete client and all agents?');">
+        <button type="submit" class="btn danger">Delete Client</button>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}
