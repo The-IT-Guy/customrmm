@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+    <h2>{{ "New Agent" if mode == "create" else "Edit Agent" }}</h2>
+    <form method="post" action="{{ '/agents/create' if mode == 'create' else '/agents/' ~ agent.id ~ '/update' }}">
+        <div class="form-field">
+            <label for="hostname">Hostname *</label>
+            <input id="hostname" name="hostname" required value="{{ agent.hostname if agent else '' }}">
+        </div>
+        <div class="form-field">
+            <label for="username">Username</label>
+            <input id="username" name="username" value="{{ agent.username if agent and agent.username else '' }}">
+        </div>
+        <div class="form-field">
+            <label for="agent_tag">Tag / Friendly Name</label>
+            <input id="agent_tag" name="agent_tag" value="{{ agent.agent_tag if agent and agent.agent_tag else '' }}">
+        </div>
+        <div class="form-field">
+            <label for="client_id">Client</label>
+            <select id="client_id" name="client_id">
+                <option value="">Unassigned</option>
+                {% for c in clients %}
+                    <option value="{{ c.id }}"
+                        {% if agent and agent.client_id == c.id %}selected{% elif client and client.id == c.id %}selected{% endif %}>
+                        {{ c.name }}{% if c.company %} – {{ c.company }}{% endif %}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-field">
+            <label for="notes">Notes</label>
+            <textarea id="notes" name="notes" rows="3">{{ agent.notes if agent and agent.notes else '' }}</textarea>
+        </div>
+        <div class="form-actions">
+            <button class="btn" type="submit">{{ "Create" if mode == "create" else "Save" }}</button>
+            <a href="{{ '/' if mode == 'create' else '/agents/' ~ agent.id }}" class="btn">Cancel</a>
+        </div>
+    </form>
+    {% if mode == "edit" %}
+    <form class="inline" method="post" action="/agents/{{ agent.id }}/delete" onsubmit="return confirm('Delete this agent?');">
+        <button type="submit" class="btn danger">Delete Agent</button>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}
