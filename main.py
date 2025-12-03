@@ -1,145 +1,112 @@
-from fastapi import FastAPI, Depends, HTTPException, Request, Form
-from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+import os
+from datetime import datetime, timedelta
+
+from fastapi import (
+    FastAPI,
+    Request,
+    Depends,
+    Form,
+    HTTPException,
+    status,
+)
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 from sqlalchemy import (
     create_engine,
     Column,
     Integer,
     String,
-    Boolean,
     DateTime,
-    ForeignKey,
     Text,
+    ForeignKey,
 )
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship, Session
 
-from passlib.hash import pbkdf2_sha256
-from datetime import datetime, timedelta
-from typing import Optional, List
-import os
-
-
-# ============ Database Setup ============
+# ---------------------------------------------------------------------
+# FastAPI + DB setup
+# ---------------------------------------------------------------------
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_DB_PATH = os.path.join(BASE_DIR, "customrmm.db")
-DB_PATH = os.environ.get("RMM_DB_PATH", DEFAULT_DB_PATH)
+DATABASE_URL = f"sqlite:///{os.path.join(BASE_DIR, 'rmm.db')}"
 
-DB_URL = f"sqlite:///{DB_PATH}"
-
-engine = create_engine(DB_URL, connect_args={"check_same_thread": False})
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+engine = create_engine(
+    DATABASE_URL, connect_args={"check_same_thread": False}
+)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+app = FastAPI(title="Nexivo RMM")
 
-# ============ FastAPI App ============
-
-app = FastAPI(title="Custom RMM")
-
-templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
-
+# Static + templates
 static_dir = os.path.join(BASE_DIR, "static")
-os.makedirs(static_dir, exist_ok=True)
+templates_dir = os.path.join(BASE_DIR, "templates")
+
+if not os.path.isdir(static_dir):
+    os.makedirs(static_dir, exist_ok=True)
+if not os.path.isdir(templates_dir):
+    os.makedirs(templates_dir, exist_ok=True)
+
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
+templates = Jinja2Templates(directory=templates_dir)
 
 
-SERVER_URL = os.environ.get("RMM_SERVER_URL", "http://localhost:8000")
-# For unattended access links (e.g., MeshCentral / RustDesk / Guacamole)
-REMOTE_BASE_URL = os.environ.get("RMM_REMOTE_BASE_URL", "")
-
-
-# ============ Models ============
-
-class User(Base):
-    __tablename__ = "users"
-
-    id = Column(Integer, primary_key=True)
-    name = Column(String(255))
-    email = Column(String(255), unique=True)
-    password_hash = Column(String(255))
-    role = Column(String(50), default="admin")
-    is_active = Column(Boolean, default=True)
-
-    def verify(self, password: str) -> bool:
-        return pbkdf2_sha256.verify(password, self.password_hash)
+# ---------------------------------------------------------------------
+# DB Models
+# ---------------------------------------------------------------------
 
 
 class Client(Base):
     __tablename__ = "clients"
 
-    id = Column(Integer, primary_key=True)
-    name = Column(String(255), unique=True)
-    contact_name = Column(String(255))
-    contact_email = Column(String(255))
-    contact_phone = Column(String(50))
-    notes = Column(Text)
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(200), nullable=False)
+    company = Column(String(200), nullable=True)
+    email = Column(String(200), nullable=True)
+    phone = Column(String(100), nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)
 
-    agents = relationship("Agent", back_populates="client", cascade="all, delete")
-    tickets = relationship("Ticket", back_populates="client", cascade="all, delete")
+    agents = relationship(
+        "Agent", back_populates="client", cascade="all, delete-orphan"
+    )
 
 
 class Agent(Base):
     __tablename__ = "agents"
 
-    id = Column(Integer, primary_key=True)
-    client_id = Column(Integer, ForeignKey("clients.id"))
-    hostname = Column(String(255))
-    os_name = Column(String(255))
-    os_version = Column(String(255))
-    ip_address = Column(String(255))
-    last_seen = Column(DateTime, default=datetime.utcnow)
+    id = Column(Integer, primary_key=True, index=True)
+    hostname = Column(String(200), nullable=False, index=True)
+    username = Column(String(200), nullable=True)
+    os_name = Column(String(200), nullable=True)
+    os_version = Column(String(200), nullable=True)
+    ip_address = Column(String(100), nullable=True)
+
+    cpu_model = Column(String(300), nullable=True)
+    cpu_cores = Column(Integer, nullable=True)
+    total_ram_gb = Column(String(50), nullable=True)
+    total_disk_gb = Column(String(50), nullable=True)
+    free_disk_gb = Column(String(50), nullable=True)
+    gpu_name = Column(String(300), nullable=True)
+
     status = Column(String(50), default="offline")
-    agent_version = Column(String(50))
+    last_checkin = Column(DateTime, default=datetime.utcnow)
 
+    agent_tag = Column(String(200), nullable=True)  # for grouping or friendly name
+    notes = Column(Text, nullable=True)
+
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=True)
     client = relationship("Client", back_populates="agents")
-    tickets = relationship("Ticket", back_populates="agent")
 
 
-class Ticket(Base):
-    __tablename__ = "tickets"
-
-    id = Column(Integer, primary_key=True)
-    client_id = Column(Integer, ForeignKey("clients.id"))
-    agent_id = Column(Integer, ForeignKey("agents.id"))
-    title = Column(String(255))
-    description = Column(Text)
-    status = Column(String(50), default="open")
-    priority = Column(String(50), default="medium")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow)
-
-    client = relationship("Client", back_populates="tickets")
-    agent = relationship("Agent", back_populates="tickets")
+Base.metadata.create_all(bind=engine)
 
 
-# ============ Database Init ============
-
-def init_db() -> None:
-    """Create tables and a default admin user."""
-    Base.metadata.create_all(bind=engine)
-
-    db = SessionLocal()
-    try:
-        if not db.query(User).filter_by(email="admin@local").first():
-            admin = User(
-                name="Admin",
-                email="admin@local",
-                password_hash=pbkdf2_sha256.hash("admin123"),
-            )
-            db.add(admin)
-            db.commit()
-    finally:
-        db.close()
-
-
-init_db()
-
-
-# ============ Dependencies ============
-
-SESSION_COOKIE = "rmm_session"
+# ---------------------------------------------------------------------
+# Dependency
+# ---------------------------------------------------------------------
 
 
 def get_db():
@@ -150,360 +117,358 @@ def get_db():
         db.close()
 
 
-def current_user(request: Request, db: Session = Depends(get_db)) -> User:
-    email = request.cookies.get(SESSION_COOKIE)
-    if not email:
-        raise HTTPException(status_code=401)
-
-    user = db.query(User).filter_by(email=email).first()
-    if not user:
-        raise HTTPException(status_code=401)
-
-    return user
+# ---------------------------------------------------------------------
+# Helper functions
+# ---------------------------------------------------------------------
 
 
-# ============ Helper Functions (Automation / Alerts) ============
+def mark_agent_status(agent: Agent):
+    """Set agent.online/offline based on last_checkin."""
+    if not agent.last_checkin:
+        agent.status = "offline"
+        return
 
-def compute_alerts_and_status(db: Session) -> List[dict]:
-    """
-    Simple "automation" engine:
-    - Marks agents offline if last_seen older than threshold.
-    - Builds an alerts list for the dashboard.
-    """
-    alerts: List[dict] = []
-    now = datetime.utcnow()
-    offline_threshold = now - timedelta(minutes=5)
-
-    agents = db.query(Agent).all()
-    for agent in agents:
-        if agent.last_seen is None:
-            continue
-
-        # Update status based on last_seen
-        if agent.last_seen < offline_threshold:
-            if agent.status != "offline":
-                agent.status = "offline"
-        else:
-            if agent.status != "online":
-                agent.status = "online"
-
-    db.commit()
-
-    # Build alert list for offline agents
-    offline_agents = db.query(Agent).filter_by(status="offline").all()
-    for a in offline_agents:
-        client_name = a.client.name if a.client else "Unknown client"
-        alerts.append(
-            {
-                "type": "Offline Agent",
-                "severity": "high",
-                "message": f"Agent {a.hostname} for {client_name} is offline.",
-                "agent_id": a.id,
-                "client_name": client_name,
-            }
-        )
-
-    return alerts
+    # If we haven’t seen it for 5 minutes, call it offline
+    if agent.last_checkin < datetime.utcnow() - timedelta(minutes=5):
+        agent.status = "offline"
+    else:
+        agent.status = "online"
 
 
-# ============ UI Pages ============
+def get_client_or_404(db: Session, client_id: int) -> Client:
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    return client
+
+
+def get_agent_or_404(db: Session, agent_id: int) -> Agent:
+    agent = db.query(Agent).filter(Agent.id == agent_id).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return agent
+
+
+# ---------------------------------------------------------------------
+# Dashboard routes (HTML)
+# ---------------------------------------------------------------------
+
 
 @app.get("/", response_class=HTMLResponse)
-def dashboard(request: Request, db: Session = Depends(get_db)):
-    # Auth check
-    try:
-        user = current_user(request, db)
-    except HTTPException:
-        return RedirectResponse("/login")
+async def dashboard(request: Request, db: Session = Depends(get_db)):
+    clients = db.query(Client).order_by(Client.created_at.desc()).all()
+    agents = db.query(Agent).order_by(Agent.last_checkin.desc()).all()
 
-    clients = db.query(Client).order_by(Client.name).all()
-    agents = db.query(Agent).order_by(Agent.id.desc()).all()
-    tickets = db.query(Ticket).order_by(Ticket.created_at.desc()).all()
-
-    alerts = compute_alerts_and_status(db)
-
-    total_clients = len(clients)
-    total_agents = len(agents)
-    online_agents = len([a for a in agents if a.status == "online"])
-    offline_agents = len([a for a in agents if a.status != "online"])
-    open_tickets = len([t for t in tickets if t.status.lower() != "closed"])
-
-    summary = {
-        "total_clients": total_clients,
-        "total_agents": total_agents,
-        "online_agents": online_agents,
-        "offline_agents": offline_agents,
-        "open_tickets": open_tickets,
-        "alert_count": len(alerts),
-    }
+    for a in agents:
+        mark_agent_status(a)
 
     return templates.TemplateResponse(
-        "dashboard.html",
+        "index.html",
         {
             "request": request,
-            "user": user,
             "clients": clients,
             "agents": agents,
-            "tickets": tickets,
-            "alerts": alerts,
-            "summary": summary,
-            "server_url": SERVER_URL,
-            "remote_base_url": REMOTE_BASE_URL,
         },
     )
 
 
-@app.get("/login", response_class=HTMLResponse)
-def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request})
+# ---------------------------------------------------------------------
+# Client CRUD (HTML)
+# ---------------------------------------------------------------------
 
 
-@app.post("/login")
-def login(email: str = Form(), password: str = Form(), db: Session = Depends(get_db)):
-    user = db.query(User).filter_by(email=email).first()
-    if not user or not user.verify(password):
-        # Redirect back to login on failure
-        return RedirectResponse("/login", status_code=302)
-
-    resp = RedirectResponse("/", status_code=302)
-    resp.set_cookie(SESSION_COOKIE, email, httponly=True)
-    return resp
-
-
-@app.get("/logout")
-def logout():
-    resp = RedirectResponse("/login", status_code=302)
-    resp.delete_cookie(SESSION_COOKIE)
-    return resp
+@app.get("/clients/new", response_class=HTMLResponse)
+async def new_client(request: Request):
+    return templates.TemplateResponse(
+        "client_form.html",
+        {
+            "request": request,
+            "mode": "create",
+            "client": None,
+        },
+    )
 
 
-# ============ Client Management ============
-
-@app.post("/clients/add")
-def add_client(
+@app.post("/clients/create")
+async def create_client(
     name: str = Form(...),
-    contact_name: str = Form(""),
-    contact_email: str = Form(""),
-    contact_phone: str = Form(""),
+    company: str = Form(""),
+    email: str = Form(""),
+    phone: str = Form(""),
     notes: str = Form(""),
-    request: Request = None,
     db: Session = Depends(get_db),
 ):
-    current_user(request, db)
-
-    if db.query(Client).filter_by(name=name).first():
-        raise HTTPException(400, "Client already exists")
-
-    c = Client(
-        name=name,
-        contact_name=contact_name,
-        contact_email=contact_email,
-        contact_phone=contact_phone,
-        notes=notes,
+    client = Client(
+        name=name.strip(),
+        company=company.strip() or None,
+        email=email.strip() or None,
+        phone=phone.strip() or None,
+        notes=notes.strip() or None,
     )
-    db.add(c)
+    db.add(client)
     db.commit()
+    db.refresh(client)
 
-    return RedirectResponse("/", status_code=302)
-
-
-@app.post("/clients/delete/{client_id}")
-def delete_client(client_id: int, request: Request, db: Session = Depends(get_db)):
-    current_user(request, db)
-
-    c = db.query(Client).get(client_id)
-    if not c:
-        raise HTTPException(404)
-
-    db.delete(c)
-    db.commit()
-    return RedirectResponse("/", status_code=302)
-
-
-# ============ Ticketing ============
-
-@app.post("/tickets/add")
-def add_ticket(
-    title: str = Form(...),
-    description: str = Form(...),
-    client_id: Optional[int] = Form(None),
-    agent_id: Optional[int] = Form(None),
-    priority: str = Form("medium"),
-    request: Request = None,
-    db: Session = Depends(get_db),
-):
-    current_user(request, db)
-
-    t = Ticket(
-        title=title,
-        description=description,
-        client_id=client_id,
-        agent_id=agent_id,
-        priority=priority,
+    return RedirectResponse(
+        url=f"/clients/{client.id}", status_code=status.HTTP_303_SEE_OTHER
     )
-    db.add(t)
-    db.commit()
-    return RedirectResponse("/", status_code=302)
 
 
-@app.post("/tickets/update/{ticket_id}")
-def update_ticket(
-    ticket_id: int,
-    status_value: str = Form(...),
-    request: Request = None,
+@app.get("/clients/{client_id}", response_class=HTMLResponse)
+async def client_detail(
+    client_id: int, request: Request, db: Session = Depends(get_db)
+):
+    client = get_client_or_404(db, client_id)
+    for a in client.agents:
+        mark_agent_status(a)
+
+    return templates.TemplateResponse(
+        "client_detail.html",
+        {
+            "request": request,
+            "client": client,
+        },
+    )
+
+
+@app.get("/clients/{client_id}/edit", response_class=HTMLResponse)
+async def edit_client(
+    client_id: int, request: Request, db: Session = Depends(get_db)
+):
+    client = get_client_or_404(db, client_id)
+    return templates.TemplateResponse(
+        "client_form.html",
+        {
+            "request": request,
+            "mode": "edit",
+            "client": client,
+        },
+    )
+
+
+@app.post("/clients/{client_id}/update")
+async def update_client(
+    client_id: int,
+    name: str = Form(...),
+    company: str = Form(""),
+    email: str = Form(""),
+    phone: str = Form(""),
+    notes: str = Form(""),
     db: Session = Depends(get_db),
 ):
-    current_user(request, db)
+    client = get_client_or_404(db, client_id)
 
-    t = db.query(Ticket).get(ticket_id)
-    if not t:
-        raise HTTPException(404)
+    client.name = name.strip()
+    client.company = company.strip() or None
+    client.email = email.strip() or None
+    client.phone = phone.strip() or None
+    client.notes = notes.strip() or None
+    client.updated_at = datetime.utcnow()
 
-    t.status = status_value
-    t.updated_at = datetime.utcnow()
     db.commit()
-    return RedirectResponse("/", status_code=302)
+
+    return RedirectResponse(
+        url=f"/clients/{client.id}", status_code=status.HTTP_303_SEE_OTHER
+    )
 
 
-# ============ Agent API (for installers / automation) ============
+@app.post("/clients/{client_id}/delete")
+async def delete_client(client_id: int, db: Session = Depends(get_db)):
+    client = get_client_or_404(db, client_id)
+    db.delete(client)
+    db.commit()
+    return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
 
-@app.post("/api/agents/register")
-def agent_register(
-    client_name: str = Form(...),
+
+# ---------------------------------------------------------------------
+# Agent CRUD (HTML)
+# ---------------------------------------------------------------------
+
+
+@app.get("/agents/new", response_class=HTMLResponse)
+async def new_agent(
+    request: Request,
+    client_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    client = None
+    if client_id:
+        client = db.query(Client).filter(Client.id == client_id).first()
+
+    return templates.TemplateResponse(
+        "agent_form.html",
+        {
+            "request": request,
+            "mode": "create",
+            "agent": None,
+            "client": client,
+            "clients": db.query(Client).all(),
+        },
+    )
+
+
+@app.post("/agents/create")
+async def create_agent(
     hostname: str = Form(...),
-    os_name: str = Form(...),
-    os_version: str = Form(...),
-    ip_address: str = Form(...),
-    agent_version: str = Form("0.1.0"),
+    username: str = Form(""),
+    agent_tag: str = Form(""),
+    notes: str = Form(""),
+    client_id: int | None = Form(None),
     db: Session = Depends(get_db),
 ):
-    client = db.query(Client).filter_by(name=client_name).first()
-    if not client:
-        raise HTTPException(404, "Client not found")
-
-    a = Agent(
-        client_id=client.id,
-        hostname=hostname,
-        os_name=os_name,
-        os_version=os_version,
-        ip_address=ip_address,
-        status="online",
-        last_seen=datetime.utcnow(),
-        agent_version=agent_version,
+    agent = Agent(
+        hostname=hostname.strip(),
+        username=username.strip() or None,
+        agent_tag=agent_tag.strip() or None,
+        notes=notes.strip() or None,
+        client_id=client_id or None,
     )
-    db.add(a)
+    db.add(agent)
+    db.commit()
+    db.refresh(agent)
+    return RedirectResponse(
+        url=f"/agents/{agent.id}", status_code=status.HTTP_303_SEE_OTHER
+    )
+
+
+@app.get("/agents/{agent_id}", response_class=HTMLResponse)
+async def agent_detail(
+    agent_id: int, request: Request, db: Session = Depends(get_db)
+):
+    agent = get_agent_or_404(db, agent_id)
+    mark_agent_status(agent)
+
+    return templates.TemplateResponse(
+        "agent_detail.html",
+        {
+            "request": request,
+            "agent": agent,
+        },
+    )
+
+
+@app.get("/agents/{agent_id}/edit", response_class=HTMLResponse)
+async def edit_agent(
+    agent_id: int, request: Request, db: Session = Depends(get_db)
+):
+    agent = get_agent_or_404(db, agent_id)
+    clients = db.query(Client).all()
+    return templates.TemplateResponse(
+        "agent_form.html",
+        {
+            "request": request,
+            "mode": "edit",
+            "agent": agent,
+            "client": agent.client,
+            "clients": clients,
+        },
+    )
+
+
+@app.post("/agents/{agent_id}/update")
+async def update_agent(
+    agent_id: int,
+    hostname: str = Form(...),
+    username: str = Form(""),
+    agent_tag: str = Form(""),
+    notes: str = Form(""),
+    client_id: int | None = Form(None),
+    db: Session = Depends(get_db),
+):
+    agent = get_agent_or_404(db, agent_id)
+
+    agent.hostname = hostname.strip()
+    agent.username = username.strip() or None
+    agent.agent_tag = agent_tag.strip() or None
+    agent.notes = notes.strip() or None
+    agent.client_id = client_id or None
+
     db.commit()
 
-    return {"agent_id": a.id}
+    return RedirectResponse(
+        url=f"/agents/{agent.id}", status_code=status.HTTP_303_SEE_OTHER
+    )
 
 
-@app.post("/api/agents/heartbeat/{agent_id}")
-def agent_heartbeat(agent_id: int, ip_address: str = Form(...), db: Session = Depends(get_db)):
-    a = db.query(Agent).get(agent_id)
-    if not a:
-        raise HTTPException(404, "Agent not found")
-
-    a.ip_address = ip_address
-    a.last_seen = datetime.utcnow()
-    a.status = "online"
+@app.post("/agents/{agent_id}/delete")
+async def delete_agent(agent_id: int, db: Session = Depends(get_db)):
+    agent = get_agent_or_404(db, agent_id)
+    db.delete(agent)
     db.commit()
+    return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
 
-    return {"status": "ok"}
+
+# ---------------------------------------------------------------------
+# Agent API – “Step 2” beefed-up check-in endpoint
+# ---------------------------------------------------------------------
 
 
-@app.get("/api/agents")
-def list_agents(db: Session = Depends(get_db)):
-    agents = db.query(Agent).all()
-    results = []
-    for a in agents:
-        results.append(
-            {
-                "id": a.id,
-                "client": a.client.name if a.client else None,
-                "hostname": a.hostname,
-                "os_name": a.os_name,
-                "os_version": a.os_version,
-                "ip_address": a.ip_address,
-                "last_seen": a.last_seen.isoformat() if a.last_seen else None,
-                "status": a.status,
-                "agent_version": a.agent_version,
-            }
+@app.post("/api/agents/checkin")
+async def agent_checkin(payload: dict, db: Session = Depends(get_db)):
+    """
+    Agent posts a JSON payload with system info.
+    If 'agent_id' is present, update that agent.
+    Otherwise, find/create by hostname.
+    """
+    agent_id = payload.get("agent_id")
+    hostname = payload.get("hostname")
+    if not hostname:
+        raise HTTPException(status_code=400, detail="hostname is required")
+
+    if agent_id:
+        agent = db.query(Agent).filter(Agent.id == agent_id).first()
+    else:
+        agent = (
+            db.query(Agent)
+            .filter(Agent.hostname == hostname)
+            .order_by(Agent.id.asc())
+            .first()
         )
-    return results
+
+    if not agent:
+        agent = Agent(hostname=hostname)
+
+    agent.username = payload.get("username") or agent.username
+    agent.os_name = payload.get("os_name") or agent.os_name
+    agent.os_version = payload.get("os_version") or agent.os_version
+    agent.ip_address = payload.get("ip_address") or agent.ip_address
+
+    agent.cpu_model = payload.get("cpu_model") or agent.cpu_model
+    agent.cpu_cores = payload.get("cpu_cores") or agent.cpu_cores
+    agent.total_ram_gb = payload.get("total_ram_gb") or agent.total_ram_gb
+    agent.total_disk_gb = payload.get("total_disk_gb") or agent.total_disk_gb
+    agent.free_disk_gb = payload.get("free_disk_gb") or agent.free_disk_gb
+    agent.gpu_name = payload.get("gpu_name") or agent.gpu_name
+
+    agent.last_checkin = datetime.utcnow()
+    agent.status = "online"
+
+    db.add(agent)
+    db.commit()
+    db.refresh(agent)
+
+    return {
+        "agent_id": agent.id,
+        "status": "ok",
+    }
 
 
-# ============ Installers (Windows / Linux / macOS) ============
-
-@app.get("/install/windows/{client_name}", response_class=PlainTextResponse)
-def windows_installer(client_name: str):
-    script = f"""# Windows RMM Installer (PowerShell)
-$Server = "{SERVER_URL}"
-$ClientName = "{client_name}"
-
-$Dest = "$env:ProgramData\\CustomRMM"
-New-Item -ItemType Directory -Force -Path $Dest | Out-Null
-
-$AgentUrl = "$Server/static/agent.py"
-$AgentPath = Join-Path $Dest "agent.py"
-
-Write-Host "Downloading agent from $AgentUrl to $AgentPath..."
-Invoke-WebRequest -Uri $AgentUrl -OutFile $AgentPath
-
-# Set environment for this session
-$env:RMM_SERVER_URL = $Server
-$env:RMM_CLIENT_NAME = $ClientName
-
-Write-Host "Starting agent..."
-# Try python3 then python
-$python = (Get-Command python3 -ErrorAction SilentlyContinue) `
-       ?? (Get-Command python -ErrorAction SilentlyContinue)
-
-if (-not $python) {{
-    Write-Host "ERROR: Python is not installed or not on PATH."
-    Write-Host "Please install Python 3 and re-run this command."
-    exit 1
-}}
-
-Start-Process -NoNewWindow -FilePath $python.Source -ArgumentList "`"$AgentPath`""
-
-Write-Host "Agent downloaded to $AgentPath and started."
-"""
-    return script
+# ---------------------------------------------------------------------
+# Simple health check
+# ---------------------------------------------------------------------
 
 
-@app.get("/install/linux/{client_name}", response_class=PlainTextResponse)
-def linux_installer(client_name: str):
-    script = f"""#!/usr/bin/env bash
-SERVER="{SERVER_URL}"
-CLIENT_NAME="{client_name}"
-
-sudo mkdir -p /opt/customrmm
-sudo curl -fsSL "$SERVER/static/agent.py" -o /opt/customrmm/agent.py
-sudo chmod +x /opt/customrmm/agent.py
-
-echo "Agent downloaded to /opt/customrmm/agent.py"
-"""
-    return script
+@app.get("/health")
+async def health():
+    return {"status": "ok", "time": datetime.utcnow().isoformat()}
 
 
-@app.get("/install/macos/{client_name}", response_class=PlainTextResponse)
-def macos_installer(client_name: str):
-    script = f"""#!/usr/bin/env bash
-SERVER="{SERVER_URL}"
-CLIENT_NAME="{client_name}"
+# ---------------------------------------------------------------------
+# Uvicorn entry point for bare-metal runs
+# (Docker still uses: uvicorn main:app --host 0.0.0.0 --port 8000)
+# ---------------------------------------------------------------------
 
-mkdir -p "$HOME/CustomRMM"
-curl -fsSL "$SERVER/static/agent.py" -o "$HOME/CustomRMM/agent.py"
-chmod +x "$HOME/CustomRMM/agent.py"
+if __name__ == "__main__":
+    import uvicorn
 
-echo "Agent downloaded to $HOME/CustomRMM/agent.py"
-"""
-    return script
-
-
-# ============ Health Check ============
-
-@app.get("/health", response_class=PlainTextResponse)
-def health():
-    return "ok"
-
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
