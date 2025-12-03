@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="margin-bottom:16px;">
+    <div class="card-header">
+        <h2>{{ client.name }}</h2>
+        <div>
+            <a href="/clients/{{ client.id }}/edit" class="btn">Edit Client</a>
+            <a href="/agents/new?client_id={{ client.id }}" class="btn">+ Add Agent</a>
+        </div>
+    </div>
+    <p style="font-size:13px; color:var(--muted); margin:4px 0;">
+        Company: {{ client.company or "-" }}<br>
+        Email: {{ client.email or "-" }}<br>
+        Phone: {{ client.phone or "-" }}
+    </p>
+    {% if client.notes %}
+        <p style="font-size:13px; margin-top:8px;">{{ client.notes }}</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Agents for {{ client.name }}</h2>
+    {% if client.agents %}
+    <table>
+        <thead>
+        <tr>
+            <th>Hostname</th>
+            <th>Status</th>
+            <th>Last Seen</th>
+            <th></th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for agent in client.agents %}
+            <tr>
+                <td>{{ agent.hostname }}</td>
+                <td>
+                    {% if agent.status == "online" %}
+                        <span class="status-pill status-online">Online</span>
+                    {% else %}
+                        <span class="status-pill status-offline">Offline</span>
+                    {% endif %}
+                </td>
+                <td>{{ agent.last_checkin.strftime("%Y-%m-%d %H:%M") if agent.last_checkin else "-" }}</td>
+                <td><a href="/agents/{{ agent.id }}" class="btn">View</a></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <p style="color: var(--muted); font-size: 13px;">No agents linked to this client yet.</p>
+    {% endif %}
+</div>
+{% endblock %}
