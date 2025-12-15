@@ -3,7 +3,7 @@ set -euo pipefail
 
 # CustomRMM No-Docker One-Line Installer (Ubuntu 22.04+)
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/The-IT-Guy/customrmm/main/install.sh | sudo bash -s -- --domain rmm.example.com --email you@example.com
+#   curl -fsSL https://raw.githubusercontent.com/The-IT-Guy/customrmm/main/install.sh | sudo bash
 #
 # Options:
 #   --domain <fqdn>         Optional. If set, nginx will use this as server_name. Certbot will be attempted.
@@ -14,7 +14,7 @@ set -euo pipefail
 #   --admin-pass <pass>     Optional. If not provided, generated and printed.
 #   --port <port>           App port behind nginx (default: 8000)
 #   --offline-minutes <n>   Minutes to consider a device offline (default: 5)
-#   --non-interactive       Do not prompt (requires admin-email; admin-pass optional)
+#   --non-interactive       Do not prompt (requires --admin-email; admin-pass optional)
 #
 # Notes:
 # - This installer sets up:
@@ -27,7 +27,7 @@ set -euo pipefail
 # Uninstall:
 #   systemctl disable --now customrmm
 #   rm -f /etc/systemd/system/customrmm.service
-#   rm -rf /opt/customrmm /etc/customrmm /var/lib/customrmm
+#   rm -rf /opt/customrmm /etc/customrmm /var/lib/customrmm /var/log/customrmm
 #   rm -f /etc/nginx/sites-enabled/customrmm /etc/nginx/sites-available/customrmm
 #   systemctl daemon-reload
 #   nginx -t && systemctl reload nginx
@@ -55,6 +55,8 @@ APP_PORT="8000"
 OFFLINE_MINUTES="5"
 NON_INTERACTIVE="0"
 
+TTY_FD=""
+
 log() { echo -e "[customrmm] $*"; }
 die() { echo -e "[customrmm] ERROR: $*" >&2; exit 1; }
 
@@ -78,6 +80,46 @@ detect_ubuntu() {
   fi
 }
 
+setup_tty() {
+  # Allows prompting even when the script is piped (curl | bash)
+  if [[ -r /dev/tty ]]; then
+    exec 3</dev/tty
+    TTY_FD="3"
+  else
+    TTY_FD=""
+  fi
+}
+
+prompt() {
+  # prompt <varname> <prompt_text> [default]
+  local __var="$1"
+  local __text="$2"
+  local __default="${3:-}"
+  local __val=""
+
+  if [[ "${NON_INTERACTIVE}" == "1" ]]; then
+    return 0
+  fi
+
+  if [[ -n "${TTY_FD}" ]]; then
+    if [[ -n "${__default}" ]]; then
+      read -r -u "${TTY_FD}" -p "${__text} [${__default}]: " __val || true
+      __val="${__val:-${__default}}"
+    else
+      read -r -u "${TTY_FD}" -p "${__text}: " __val || true
+    fi
+  else
+    if [[ -n "${__default}" ]]; then
+      read -r -p "${__text} [${__default}]: " __val || true
+      __val="${__val:-${__default}}"
+    else
+      read -r -p "${__text}: " __val || true
+    fi
+  fi
+
+  printf -v "${__var}" '%s' "${__val}"
+}
+
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -91,7 +133,7 @@ parse_args() {
       --offline-minutes) OFFLINE_MINUTES="${2:-}"; shift 2 ;;
       --non-interactive) NON_INTERACTIVE="1"; shift 1 ;;
       -h|--help)
-        sed -n '1,120p' "$0"; exit 0 ;;
+        sed -n '1,140p' "$0"; exit 0 ;;
       *)
         die "Unknown option: $1"
         ;;
@@ -106,18 +148,17 @@ prompt_if_needed() {
   fi
 
   if [[ -z "${DOMAIN}" ]]; then
-    read -r -p "Domain (optional; press Enter to skip and use IP): " DOMAIN || true
+    prompt DOMAIN "Domain (optional; press Enter to skip and use IP)"
   fi
   if [[ -n "${DOMAIN}" && -z "${LE_EMAIL}" ]]; then
-    read -r -p "Email for Let's Encrypt (required if using a domain): " LE_EMAIL || true
+    prompt LE_EMAIL "Email for Let's Encrypt (required if using a domain)"
   fi
   if [[ -z "${ADMIN_EMAIL}" ]]; then
-    read -r -p "Admin email: " ADMIN_EMAIL || true
+    prompt ADMIN_EMAIL "Admin email"
   fi
 }
 
 rand_pass() {
-  # 20 chars; avoids problematic shell chars
   tr -dc 'A-Za-z0-9!@#%^_+=-' </dev/urandom | head -c 20
 }
 
@@ -156,9 +197,9 @@ clone_or_update_repo() {
     sudo -u "${APP_USER}" git clone --branch "${BRANCH}" --depth 1 "${REPO_URL}" "${APP_DIR}"
   fi
 
-  # Ensure expected files exist
   [[ -f "${APP_DIR}/main.py" ]] || die "main.py not found in ${APP_DIR}. Did you push the code to the repo?"
   [[ -f "${APP_DIR}/requirements.txt" ]] || die "requirements.txt not found in ${APP_DIR}."
+  [[ -f "${APP_DIR}/manage.py" ]] || die "manage.py not found in ${APP_DIR}."
 }
 
 setup_venv() {
@@ -184,7 +225,6 @@ print(secrets.token_urlsafe(24))
 PY
 )"
 
-  # If admin pass not provided, generate
   if [[ -z "${ADMIN_PASS}" ]]; then
     ADMIN_PASS="$(rand_pass)"
   fi
@@ -213,10 +253,8 @@ EOF
 
 init_db_and_admin() {
   log "Initializing database and creating admin user..."
-  # Ensure app files are readable to service user
   chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}" "${DATA_DIR}" "${LOG_DIR}"
 
-  # Run DB init and create admin
   sudo -u "${APP_USER}" -H "${APP_DIR}/venv/bin/python" "${APP_DIR}/manage.py" initdb
   sudo -u "${APP_USER}" -H "${APP_DIR}/venv/bin/python" "${APP_DIR}/manage.py" create-admin --email "${ADMIN_EMAIL}" --password "${ADMIN_PASS}" || true
 }
@@ -290,7 +328,6 @@ EOF
 
   ln -sf "${NGINX_SITE_AVAIL}" "${NGINX_SITE_ENABLED}"
 
-  # disable default site if present
   if [[ -e /etc/nginx/sites-enabled/default ]]; then
     rm -f /etc/nginx/sites-enabled/default
   fi
@@ -322,7 +359,6 @@ try_certbot() {
     return
   fi
 
-  # Now that HTTPS is active, set secure cookies.
   log "HTTPS enabled. Updating SESSION_HTTPS_ONLY=true"
   sed -i 's/^SESSION_HTTPS_ONLY=.*/SESSION_HTTPS_ONLY=true/' "${ENV_FILE}"
   systemctl restart customrmm
@@ -360,6 +396,7 @@ print_finish() {
 main() {
   need_root
   detect_ubuntu
+  setup_tty
   parse_args "$@"
   prompt_if_needed
 
@@ -367,7 +404,7 @@ main() {
     die "--email is required when --domain is provided"
   fi
   if [[ -z "${ADMIN_EMAIL}" ]]; then
-    die "Admin email is required."
+    die "Admin email is required. (Tip: with curl|bash, pass --admin-email or use the updated installer that prompts via /dev/tty)"
   fi
 
   apt_install
