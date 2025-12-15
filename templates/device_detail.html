@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% set title = "Device" %}
+{% block content %}
+
+<div class="bar">
+  <div class="bar-left">
+    <div class="bar-title">{{ device.hostname }}</div>
+    <div class="bar-sub muted">UUID: <span class="mono">{{ device.device_uuid }}</span></div>
+  </div>
+  <div class="bar-right">
+    <form method="post" action="/devices/{{ device.id }}/delete" class="inline" onsubmit="return confirm('Delete this device and all its heartbeats/alerts?')">
+      <button class="btn btn-danger" type="submit">Delete device</button>
+    </form>
+    <a class="btn btn-ghost" href="/devices">Back</a>
+  </div>
+</div>
+
+<div class="grid grid-3">
+  <div class="card">
+    <div class="card-label">Status</div>
+    <div class="card-value">
+      <span class="badge badge-{{ device_status }}">{{ device_status }}</span>
+    </div>
+    <div class="card-meta muted">Last seen: {{ device.last_seen or "-" }}</div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">OS</div>
+    <div class="card-value">{{ device.os }}</div>
+    <div class="card-meta muted">Agent: {{ device.agent_version or "-" }}</div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">IP</div>
+    <div class="card-value">{{ device.ip or "-" }}</div>
+    <div class="card-meta muted">Created: {{ device.created_at }}</div>
+  </div>
+</div>
+
+<div class="split">
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">Assignment</div>
+        <div class="card-sub muted">Assign this device to a client</div>
+      </div>
+    </div>
+
+    <form method="post" action="/devices/{{ device.id }}/assign" class="form compact">
+      <label>Client</label>
+      <select name="client_id">
+        <option value="">Unassigned</option>
+        {% for c in clients %}
+          <option value="{{ c.id }}" {% if device.client_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+        {% endfor %}
+      </select>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+
+    <div class="divider"></div>
+
+    <div class="card-sub muted">API token (agent bearer token)</div>
+    <div class="mono-box">{{ device.api_token }}</div>
+    <div class="hint muted">Keep this private. Agent uses it in Authorization header.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">Recent heartbeats</div>
+        <div class="card-sub muted">Latest 50</div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>CPU</th>
+            <th>MEM</th>
+            <th>DISK</th>
+            <th>Uptime</th>
+            <th>Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for hb in heartbeats %}
+            <tr>
+              <td class="muted">{{ hb.ts }}</td>
+              <td class="muted">{{ hb.cpu_load if hb.cpu_load is not none else "-" }}%</td>
+              <td class="muted">{{ hb.mem_used if hb.mem_used is not none else "-" }}%</td>
+              <td class="muted">{{ hb.disk_used if hb.disk_used is not none else "-" }}%</td>
+              <td class="muted">{{ hb.uptime_seconds if hb.uptime_seconds is not none else "-" }}</td>
+              <td class="muted">{{ hb.note or "-" }}</td>
+            </tr>
+          {% endfor %}
+          {% if heartbeats|length == 0 %}
+            <tr><td colspan="6" class="muted">No heartbeats yet.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="card-header">
+      <div>
+        <div class="card-title">Alerts</div>
+        <div class="card-sub muted">Latest 20</div>
+      </div>
+    </div>
+    <div class="alert-list">
+      {% for a in alerts %}
+        <div class="alert-row">
+          <div class="alert-dot {{ a.level }}"></div>
+          <div class="alert-body">
+            <div class="alert-title">{{ a.title }}{% if a.acknowledged %}<span class="muted"> • acknowledged</span>{% endif %}</div>
+            <div class="alert-meta muted">{{ a.ts }}</div>
+            {% if a.details %}<div class="muted">{{ a.details }}</div>{% endif %}
+          </div>
+        </div>
+      {% endfor %}
+      {% if alerts|length == 0 %}
+        <div class="muted">No alerts for this device.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% endblock %}

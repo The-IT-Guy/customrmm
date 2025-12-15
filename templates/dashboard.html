@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% set title = "Dashboard" %}
+{% block content %}
+
+<div class="grid grid-3">
+  <div class="card">
+    <div class="card-label">Clients</div>
+    <div class="card-value">{{ counts.clients }}</div>
+    <div class="card-meta"><a href="/clients">Manage clients</a></div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">Devices</div>
+    <div class="card-value">{{ counts.devices }}</div>
+    <div class="card-meta"><a href="/devices">View devices</a></div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">Open alerts</div>
+    <div class="card-value">{{ counts.alerts_open }}</div>
+    <div class="card-meta"><a href="/alerts">Review alerts</a></div>
+  </div>
+</div>
+
+<div class="split">
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">Recent devices</div>
+        <div class="card-sub">Offline threshold: {{ offline_minutes }} min</div>
+      </div>
+      <a class="btn btn-ghost" href="/devices">All</a>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Hostname</th>
+            <th>OS</th>
+            <th>IP</th>
+            <th>Last seen</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in recent_devices %}
+            {% set st = "online" if d.last_seen and (d.last_seen|string) else "new" %}
+            <tr>
+              <td><span class="badge badge-{{ d.status }}">{{ d.status }}</span></td>
+              <td><a href="/devices/{{ d.id }}">{{ d.hostname }}</a></td>
+              <td class="muted">{{ d.os }}</td>
+              <td class="muted">{{ d.ip or "-" }}</td>
+              <td class="muted">{{ d.last_seen or "-" }}</td>
+            </tr>
+          {% endfor %}
+          {% if recent_devices|length == 0 %}
+            <tr><td colspan="5" class="muted">No devices yet. Install an agent and register.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">Recent alerts</div>
+        <div class="card-sub">Unacknowledged alerts show in <a href="/alerts">Alerts</a></div>
+      </div>
+      <a class="btn btn-ghost" href="/alerts">All</a>
+    </div>
+
+    <div class="alert-list">
+      {% for a in recent_alerts %}
+        <div class="alert-row">
+          <div class="alert-dot {{ a.level }}"></div>
+          <div class="alert-body">
+            <div class="alert-title">{{ a.title }}</div>
+            <div class="alert-meta muted">{{ a.ts }}{% if a.acknowledged %} • acknowledged{% endif %}</div>
+          </div>
+        </div>
+      {% endfor %}
+      {% if recent_alerts|length == 0 %}
+        <div class="muted">No alerts yet.</div>
+      {% endif %}
+    </div>
+
+    <div class="card-footer">
+      <div class="hint">
+        Enrollment key hint: <span class="mono">{{ enroll_key_hint }}</span> (full key in Settings)
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

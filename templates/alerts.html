@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% set title = "Alerts" %}
+{% block content %}
+
+<div class="bar">
+  <div class="bar-left">
+    <div class="bar-title">Alerts</div>
+    <div class="bar-sub muted">Acknowledge alerts to clear them from “open”</div>
+  </div>
+  <div class="bar-right">
+    <a class="btn btn-ghost {% if show == 'open' %}active{% endif %}" href="/alerts?show=open">Open</a>
+    <a class="btn btn-ghost {% if show != 'open' %}active{% endif %}" href="/alerts?show=all">All</a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Level</th>
+          <th>Title</th>
+          <th>Device</th>
+          <th>Time</th>
+          <th class="right">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in alerts %}
+          <tr>
+            <td><span class="badge badge-{{ a.level }}">{{ a.level }}</span></td>
+            <td>
+              <strong>{{ a.title }}</strong>
+              {% if a.details %}<div class="muted">{{ a.details }}</div>{% endif %}
+            </td>
+            <td class="muted"><a href="/devices/{{ a.device_id }}">{{ a.device_hostname }}</a></td>
+            <td class="muted">{{ a.ts }}</td>
+            <td class="right">
+              {% if not a.acknowledged %}
+                <form method="post" action="/alerts/{{ a.id }}/ack" class="inline">
+                  <button type="submit" class="btn btn-primary">Acknowledge</button>
+                </form>
+              {% else %}
+                <span class="muted">—</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        {% if alerts|length == 0 %}
+          <tr><td colspan="5" class="muted">No alerts.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% set title = "New client" if mode == "new" else "Edit client" %}
+{% block content %}
+
+<div class="bar">
+  <div class="bar-left">
+    <div class="bar-title">{{ title }}</div>
+    <div class="bar-sub muted">Client records are used to group devices</div>
+  </div>
+  <div class="bar-right">
+    <a class="btn btn-ghost" href="/clients">Back</a>
+  </div>
+</div>
+
+{% if error %}
+  <div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<div class="card">
+  <form method="post" action="{% if mode == 'new' %}/clients/new{% else %}/clients/{{ client.id }}/edit{% endif %}" class="form">
+    <label>Name</label>
+    <input type="text" name="name" value="{{ client.name if client else '' }}" required />
+
+    <label>Notes</label>
+    <textarea name="notes" rows="4" placeholder="Optional...">{{ client.notes if client and client.notes else '' }}</textarea>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">{% if mode == 'new' %}Create{% else %}Save{% endif %}</button>
+      <a class="btn btn-ghost" href="/clients">Cancel</a>
+    </div>
+  </form>
+</div>
+
+{% endblock %}

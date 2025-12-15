@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <title>{{ app_name }}{% if title %} — {{ title }}{% endif %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <div class="layout" id="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="brand">
+          <div class="brand-mark">R</div>
+          <div class="brand-text">
+            <div class="brand-name">{{ app_name }}</div>
+            <div class="brand-sub">No‑Docker Server</div>
+          </div>
+        </div>
+
+        <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="Toggle navigation">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+
+      <nav class="sidebar-nav">
+        {% for group in sidebar %}
+          <div class="nav-group">
+            <div class="nav-group-label">{{ group.label }}</div>
+            {% for item in group.items %}
+              {% set is_active = (active_path == item.href) or (active_path.startswith(item.href + "/")) %}
+              <a class="nav-item {% if is_active %}active{% endif %}" href="{{ item.href }}">
+                <span class="nav-icon">{{ icons[item.icon] | safe }}</span>
+                <span class="nav-text">{{ item.name }}</span>
+              </a>
+            {% endfor %}
+          </div>
+        {% endfor %}
+      </nav>
+
+      <div class="sidebar-footer">
+        {% if user %}
+          <div class="user-chip" title="{{ user.email }}">
+            <div class="user-dot"></div>
+            <div class="user-email">{{ user.email }}</div>
+          </div>
+          <a class="logout" href="/logout">Logout</a>
+        {% else %}
+          <div class="user-chip">
+            <div class="user-dot"></div>
+            <div class="user-email">Not signed in</div>
+          </div>
+        {% endif %}
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="mobile-toggle" id="mobileToggle" type="button" aria-label="Open menu">
+            <span></span><span></span><span></span>
+          </button>
+          <div class="page-title">
+            {% if title %}{{ title }}{% else %}{{ app_name }}{% endif %}
+          </div>
+        </div>
+        <div class="topbar-right">
+          {% if base_url %}
+            <span class="pill">Base URL: {{ base_url }}</span>
+          {% endif %}
+        </div>
+      </header>
+
+      <section class="content">
+        {% block content %}{% endblock %}
+      </section>
+
+      <footer class="footer">
+        <span>© {{ app_name }} — v1 (no-docker)</span>
+      </footer>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

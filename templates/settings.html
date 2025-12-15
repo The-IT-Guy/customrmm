@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% set title = "Settings" %}
+{% block content %}
+
+<div class="bar">
+  <div class="bar-left">
+    <div class="bar-title">Settings</div>
+    <div class="bar-sub muted">Server configuration hints</div>
+  </div>
+</div>
+
+<div class="grid grid-2">
+  <div class="card">
+    <div class="card-title">Offline monitoring</div>
+    <div class="card-sub muted">Devices are considered offline after:</div>
+    <div class="mono-box">{{ offline_minutes }} minutes</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Agent enrollment key</div>
+    <div class="card-sub muted">Needed only for initial /api/v1/register</div>
+    <div class="mono-box">{{ enroll_key }}</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Database</div>
+    <div class="card-sub muted">SQLite path</div>
+    <div class="mono-box">{{ db_path }}</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Session security</div>
+    <div class="card-sub muted">SESSION_HTTPS_ONLY</div>
+    <div class="mono-box">{{ https_only }}</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Next steps</div>
+  <ul class="list">
+    <li>Add additional users and roles (admin/tech/read-only).</li>
+    <li>Add remote script execution (queue scripts, agent pulls tasks).</li>
+    <li>Add patch reporting + software inventory.</li>
+    <li>Add email/SMS alert integrations.</li>
+  </ul>
+</div>
+
+{% endblock %}
