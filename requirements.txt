@@ -7,3 +7,4 @@ passlib[bcrypt]==1.7.4
 itsdangerous==2.2.0
 aiofiles==24.1.0
 python-dotenv==1.0.1
+bcrypt<5
