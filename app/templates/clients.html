@@ -1,0 +1,59 @@
+{% extends "_layout.html" %}
+{% block content %}
+  <div class="h1">Clients</div>
+  <div class="help">Create clients, then add devices under each client.</div>
+
+  {% if error %}<div class="error" style="margin-top:12px;">{{ error }}</div>{% endif %}
+
+  <div class="grid" style="margin-top:16px;">
+    <div class="card" style="grid-column: span 5;">
+      <div class="h2">Create client</div>
+      <form method="post" action="/clients/create">
+        <div class="row">
+          <div class="col">
+            <label class="help">Client name</label>
+            <input class="input" name="name" type="text" required />
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <div class="col"><label class="help">Contact name</label><input class="input" name="contact_name" type="text" /></div>
+          <div class="col"><label class="help">Contact email</label><input class="input" name="contact_email" type="email" /></div>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <div class="col"><label class="help">Contact phone</label><input class="input" name="contact_phone" type="text" /></div>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <div class="col"><label class="help">Notes</label><textarea class="textarea" name="notes"></textarea></div>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <button class="btn primary" type="submit">Create</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card" style="grid-column: span 7;">
+      <div class="h2">All clients</div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Contact</th>
+            <th>Email</th>
+            <th>Phone</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in clients %}
+          <tr>
+            <td><a href="/clients/{{ c.id }}"><strong>{{ c.name }}</strong></a></td>
+            <td>{{ c.contact_name or "-" }}</td>
+            <td>{{ c.contact_email or "-" }}</td>
+            <td>{{ c.contact_phone or "-" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="help" style="margin-top:10px;">Tip: open a client to add devices.</div>
+    </div>
+  </div>
+{% endblock %}

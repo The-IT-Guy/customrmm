@@ -1,0 +1,38 @@
+{% extends "_layout.html" %}
+{% block content %}
+  <div class="grid" style="place-items:center; min-height:70vh;">
+    <div class="card" style="max-width:620px; width:100%;">
+      <div class="h1">Setup Admin</div>
+      <div class="help">One-time setup. Creates your first organization and admin user.</div>
+      {% if error %}<div class="error" style="margin-top:12px;">{{ error }}</div>{% endif %}
+      <form method="post" action="/setup-admin" style="margin-top:14px;">
+        <div class="row">
+          <div class="col">
+            <label class="help">Organization name</label>
+            <input class="input" name="org_name" type="text" required />
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <div class="col">
+            <label class="help">Full name</label>
+            <input class="input" name="full_name" type="text" required />
+          </div>
+          <div class="col">
+            <label class="help">Email</label>
+            <input class="input" name="email" type="email" required />
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <div class="col">
+            <label class="help">Password</label>
+            <input class="input" name="password" type="password" minlength="10" required />
+            <div class="help" style="margin-top:8px;">Min length: {{ 10 }}</div>
+          </div>
+        </div>
+        <div class="row" style="margin-top:14px;">
+          <button class="btn primary" type="submit" style="width:100%;">Create Admin + Enter Dashboard</button>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

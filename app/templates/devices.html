@@ -1,0 +1,78 @@
+{% extends "_layout.html" %}
+{% block content %}
+  <div class="h1">Devices</div>
+  <div class="help">Create devices, enroll agents, view health, dispatch tasks.</div>
+
+  {% if error %}<div class="error" style="margin-top:12px;">{{ error }}</div>{% endif %}
+
+  <div class="grid" style="margin-top:16px;">
+    <div class="card" style="grid-column: span 5;">
+      <div class="h2">Create device</div>
+      <form method="post" action="/devices/create">
+        <div class="row">
+          <div class="col">
+            <label class="help">Client</label>
+            <select class="select" name="client_id" required>
+              <option value="">Select...</option>
+              {% for c in clients %}
+              <option value="{{ c.id }}">{{ c.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <div class="col">
+            <label class="help">Hostname</label>
+            <input class="input" name="hostname" type="text" required placeholder="pc-01" />
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <div class="col">
+            <label class="help">Display name (optional)</label>
+            <input class="input" name="display_name" type="text" placeholder="Reception PC" />
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <button class="btn primary" type="submit">Create + Get Enroll Token</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card" style="grid-column: span 7;">
+      <div class="h2">All devices</div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Hostname</th>
+            <th>Client</th>
+            <th>Status</th>
+            <th>CPU</th>
+            <th>RAM</th>
+            <th>Disk</th>
+            <th>Last seen</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in devices %}
+          <tr>
+            <td><a href="/devices/{{ d.id }}"><strong>{{ d.hostname }}</strong></a><div class="help">{{ d.display_name or "" }}</div></td>
+            <td>{{ d.client.name if d.client else d.client_id }}</td>
+            <td>
+              {% if d._status == "Online" %}
+                <span class="badge ok">Online</span>
+              {% else %}
+                <span class="badge bad">Offline</span>
+              {% endif %}
+            </td>
+            <td>{{ d.cpu_percent if d.cpu_percent is not none else "-" }}</td>
+            <td>{{ d.ram_percent if d.ram_percent is not none else "-" }}</td>
+            <td>{{ d.disk_percent if d.disk_percent is not none else "-" }}</td>
+            <td>{{ d.last_seen_at if d.last_seen_at else "-" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="help" style="margin-top:10px;">Open a device for enrollment + tasks.</div>
+    </div>
+  </div>
+{% endblock %}

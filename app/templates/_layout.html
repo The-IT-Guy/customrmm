@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title or app_name }}</title>
+  <link rel="stylesheet" href="/static/styles.css?v=1" />
+  <script defer src="/static/main.js?v=1"></script>
+</head>
+<body>
+  {% if user %}
+  <div class="topbar">
+    <div class="nav">
+      <div class="brand">
+        <span class="brand-badge"></span>
+        <span>{{ app_name }}</span>
+        <span class="badge">Org: {{ user.org.name if user.org else user.org_id }}</span>
+      </div>
+      <div class="navlinks">
+        <a href="/dashboard" class="{% if nav=='dashboard' %}active{% endif %}">Dashboard</a>
+        <a href="/clients" class="{% if nav=='clients' %}active{% endif %}">Clients</a>
+        <a href="/devices" class="{% if nav=='devices' %}active{% endif %}">Devices</a>
+        <a href="/tasks" class="{% if nav=='tasks' %}active{% endif %}">Tasks</a>
+        <a href="/settings" class="{% if nav=='settings' %}active{% endif %}">Settings</a>
+        <a href="/logout">Logout</a>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="container">
+    {% block content %}{% endblock %}
+    <div class="footer">
+      Alpha build • CustomRMM • Session-based login • Agent check-in + tasks
+    </div>
+  </div>
+</body>
+</html>

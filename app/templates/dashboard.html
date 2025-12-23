@@ -1,0 +1,127 @@
+{% extends "_layout.html" %}
+{% block content %}
+  <div class="h1">Dashboard</div>
+  <div class="help">Offline threshold: {{ offline_minutes }} minutes</div>
+
+  <div class="grid" style="margin-top:16px;">
+    <div class="kpi" style="grid-column: span 3;">
+      <div class="label">Clients</div>
+      <div class="value">{{ clients|length }}</div>
+    </div>
+    <div class="kpi" style="grid-column: span 3;">
+      <div class="label">Devices</div>
+      <div class="value">{{ devices|length }}</div>
+    </div>
+    <div class="kpi" style="grid-column: span 3;">
+      <div class="label">Open Alerts</div>
+      <div class="value">{{ alerts|selectattr("is_resolved", "equalto", False)|list|length }}</div>
+    </div>
+    <div class="kpi" style="grid-column: span 3;">
+      <div class="label">Queued Tasks</div>
+      <div class="value">{{ tasks|selectattr("status", "equalto", "queued")|list|length }}</div>
+    </div>
+
+    <div class="card" style="grid-column: span 7;">
+      <div class="h2">Device status</div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Device</th>
+            <th>Client</th>
+            <th>Status</th>
+            <th>CPU</th>
+            <th>RAM</th>
+            <th>Disk</th>
+            <th>Last Seen</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in devices[:12] %}
+          <tr>
+            <td><a href="/devices/{{ d.id }}"><strong>{{ d.hostname }}</strong></a><div class="help">{{ d.os or "" }}</div></td>
+            <td>{{ d.client.name if d.client else d.client_id }}</td>
+            <td>
+              {% if d._status == "Online" %}
+                <span class="badge ok">Online</span>
+              {% else %}
+                <span class="badge bad">Offline</span>
+              {% endif %}
+            </td>
+            <td>{{ d.cpu_percent if d.cpu_percent is not none else "-" }}</td>
+            <td>{{ d.ram_percent if d.ram_percent is not none else "-" }}</td>
+            <td>{{ d.disk_percent if d.disk_percent is not none else "-" }}</td>
+            <td>{{ d.last_seen_at if d.last_seen_at else "-" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="help" style="margin-top:10px;"><a class="btn small" href="/devices">View all devices</a></div>
+    </div>
+
+    <div class="card" style="grid-column: span 5;">
+      <div class="h2">Recent alerts</div>
+      {% if alerts|length == 0 %}
+        <div class="help">No alerts yet.</div>
+      {% else %}
+        <table class="table">
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Device</th>
+              <th>Severity</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for a in alerts %}
+            <tr>
+              <td>{{ a.created_at }}</td>
+              <td><a href="/devices/{{ a.device_id }}"><strong>#{{ a.device_id }}</strong></a><div class="help">{{ a.title }}</div></td>
+              <td>
+                {% if a.severity == "critical" %}<span class="badge bad">Critical</span>
+                {% elif a.severity == "warning" %}<span class="badge warn">Warning</span>
+                {% else %}<span class="badge">Info</span>{% endif %}
+                {% if a.is_resolved %}<div class="help">Resolved</div>{% endif %}
+              </td>
+              <td>
+                {% if not a.is_resolved %}
+                <form method="post" action="/alerts/{{ a.id }}/resolve">
+                  <button class="btn small" type="submit">Resolve</button>
+                </form>
+                {% else %}-{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+    </div>
+
+    <div class="card" style="grid-column: span 12;">
+      <div class="h2">Recent tasks</div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>When</th>
+            <th>Device</th>
+            <th>Kind</th>
+            <th>Status</th>
+            <th>Exit</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in tasks %}
+          <tr>
+            <td>{{ t.created_at }}</td>
+            <td><a href="/devices/{{ t.device_id }}"><strong>#{{ t.device_id }}</strong></a></td>
+            <td>{{ t.kind }}</td>
+            <td>{{ t.status }}</td>
+            <td>{{ t.exit_code if t.exit_code is not none else "-" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="help" style="margin-top:10px;"><a class="btn small" href="/tasks">Open tasks</a></div>
+    </div>
+  </div>
+{% endblock %}
