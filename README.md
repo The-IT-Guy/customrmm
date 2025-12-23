@@ -1,57 +1,51 @@
-# CustomRMM (No Docker) — v1
+# CustomRMM (Alpha)
 
-This is a minimal, functional RMM server you can install on **Ubuntu 22.04+** with **no control panel**.
+This repository is a working alpha build of a self-hosted RMM dashboard + agent check-in system.
 
-## What’s included
-- Web UI (FastAPI + Jinja templates)
-- Left sidebar navigation (Dashboard / Alerts / Devices / Clients / Scripts / Settings / Logs)
-- SQLite database
-- Admin setup / login
-- Clients CRUD
-- Devices list + detail (heartbeats + alerts)
-- Agent API endpoints:
-  - `POST /api/v1/register` (requires `X-ENROLL-KEY`)
-  - `POST /api/v1/heartbeat` (requires `Authorization: Bearer <device_token>`)
-- Background offline monitor creates "Device offline" alerts
+## What works in this alpha
+- One-time **Setup Admin** flow (creates first org + admin user)
+- Session-based login/logout
+- Optional TOTP per user (enable in Settings)
+- Multi-tenant data model (Organization -> Users, Clients, Devices)
+- Client CRUD (UI + server-side validation)
+- Device enrollment tokens, agent registration, device keys
+- Agent check-in with metrics (CPU, RAM, disk, uptime, IP, OS)
+- Device status (Online/Offline by last seen)
+- Alerts (basic threshold + offline) stored in DB and shown in UI
+- Remote Tasking (create task, agent polls, returns output, UI shows results)
 
-## One-line install
-After you push these files to your GitHub repo (default assumes `The-IT-Guy/customrmm`):
-
+## Quick start (Docker)
+1) Copy env file and set secrets:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/The-IT-Guy/customrmm/main/install.sh | sudo bash
+cp .env.example .env
+# edit .env (set SECRET_KEY at minimum)
 ```
 
-With a domain + Let's Encrypt:
-
+2) Start:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/The-IT-Guy/customrmm/main/install.sh | sudo bash -s -- \
-  --domain rmm.example.com --email you@example.com
+docker compose up -d --build
 ```
 
-## Service control
+3) Open:
+- http://YOUR_SERVER:8000/setup-admin (only if no users exist yet)
+
+## Linux host (no Docker)
 ```bash
-sudo systemctl status customrmm --no-pager
-sudo journalctl -u customrmm -n 200 --no-pager
-sudo systemctl restart customrmm
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+mkdir -p data
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-## Agent quick test (no agent needed)
-1) Open **Settings** and copy ENROLL_KEY.
-2) Register a device:
-```bash
-curl -sS -X POST http://YOUR_SERVER_IP/api/v1/register \
-  -H "Content-Type: application/json" \
-  -H "X-ENROLL-KEY: YOUR_ENROLL_KEY" \
-  -d '{"device_uuid":"demo-001","hostname":"demo-host","os":"Linux","ip":"1.2.3.4","agent_version":"1.0.0"}'
-```
-The response includes `api_token`.
+## Agent
+Alpha agent is a single Python file in `/agent/agent.py`.
+- It can run as a service (systemd) or scheduled task.
+- It enrolls once with an enrollment token and then checks in on an interval.
 
-3) Send a heartbeat:
-```bash
-curl -sS -X POST http://YOUR_SERVER_IP/api/v1/heartbeat \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_DEVICE_API_TOKEN" \
-  -d '{"cpu":10,"mem":20,"disk":30,"uptime_seconds":1234,"note":"hello"}'
-```
+See `/agent/README.md` and `/scripts/` for installers.
 
-Refresh **Devices**.
+## Notes
+- This alpha uses `create_all()` on startup (no Alembic). For beta, switch to Alembic migrations.
+- Notifications are stubbed (email/SMS config placeholders are included).

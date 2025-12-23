@@ -1,0 +1,66 @@
+{% extends "_layout.html" %}
+{% block content %}
+  <div class="h1">{{ client.name }}</div>
+  <div class="help">Client details + devices</div>
+
+  {% if error %}<div class="error" style="margin-top:12px;">{{ error }}</div>{% endif %}
+
+  <div class="grid" style="margin-top:16px;">
+    <div class="card" style="grid-column: span 5;">
+      <div class="h2">Update client</div>
+      <form method="post" action="/clients/{{ client.id }}/update">
+        <div class="row">
+          <div class="col">
+            <label class="help">Client name</label>
+            <input class="input" name="name" type="text" value="{{ client.name }}" required />
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <div class="col"><label class="help">Contact name</label><input class="input" name="contact_name" type="text" value="{{ client.contact_name or '' }}" /></div>
+          <div class="col"><label class="help">Contact email</label><input class="input" name="contact_email" type="email" value="{{ client.contact_email or '' }}" /></div>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <div class="col"><label class="help">Contact phone</label><input class="input" name="contact_phone" type="text" value="{{ client.contact_phone or '' }}" /></div>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <div class="col"><label class="help">Notes</label><textarea class="textarea" name="notes">{{ client.notes or '' }}</textarea></div>
+        </div>
+        <div class="row" style="margin-top:12px; justify-content:space-between;">
+          <button class="btn primary" type="submit">Save</button>
+        </div>
+      </form>
+
+      <form method="post" action="/clients/{{ client.id }}/delete" style="margin-top:12px;">
+        <button class="btn danger" type="submit" onclick="return confirm('Delete this client and all devices?');">Delete client</button>
+      </form>
+    </div>
+
+    <div class="card" style="grid-column: span 7;">
+      <div class="h2">Devices</div>
+      {% if devices|length == 0 %}
+        <div class="help">No devices yet. Add devices from the Devices page.</div>
+      {% endif %}
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Hostname</th>
+            <th>OS</th>
+            <th>Last seen</th>
+            <th>CPU/RAM/Disk</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in devices %}
+          <tr>
+            <td><a href="/devices/{{ d.id }}"><strong>{{ d.hostname }}</strong></a></td>
+            <td>{{ d.os or "-" }}</td>
+            <td>{{ d.last_seen_at or "-" }}</td>
+            <td>{{ d.cpu_percent if d.cpu_percent is not none else "-" }}/{{ d.ram_percent if d.ram_percent is not none else "-" }}/{{ d.disk_percent if d.disk_percent is not none else "-" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="help" style="margin-top:10px;"><a class="btn small" href="/devices">Add a device</a></div>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,132 @@
+{% extends "_layout.html" %}
+{% block content %}
+  <div class="h1">{{ device.hostname }}</div>
+  <div class="help">Client: <a href="/clients/{{ client.id }}"><strong>{{ client.name }}</strong></a> • Device ID: {{ device.id }}</div>
+
+  <div class="grid" style="margin-top:16px;">
+    <div class="card" style="grid-column: span 5;">
+      <div class="h2">Enrollment</div>
+      {% if device.device_key %}
+        <div class="badge ok">Enrolled</div>
+        <div class="help" style="margin-top:10px;">Device key is stored on agent and on server. Regenerate token to re-enroll.</div>
+      {% else %}
+        <div class="badge warn">Not enrolled</div>
+        <div class="help" style="margin-top:10px;">Use enrollment token to register an agent. You can copy the Python agent from <span class="code">/agent/agent.py</span>.</div>
+      {% endif %}
+
+      <div class="help" style="margin-top:12px;">Enroll command (Linux/macOS):</div>
+      <div class="code" style="margin-top:8px;">{{ enroll_cmd }}</div>
+
+      <div class="help" style="margin-top:12px;">Windows PowerShell (example):</div>
+      <div class="code" style="margin-top:8px;">
+python -m pip install psutil httpx &amp;&amp; python agent.py --server {{ base_url }} --enroll-token {{ device.enroll_token }} --once
+      </div>
+
+      <form method="post" action="/devices/{{ device.id }}/regen-token" style="margin-top:12px;">
+        <button class="btn danger" type="submit" onclick="return confirm('Regenerate enroll token and invalidate device key?');">Regenerate enroll token</button>
+      </form>
+    </div>
+
+    <div class="card" style="grid-column: span 7;">
+      <div class="h2">Health</div>
+      <table class="table">
+        <tbody>
+          <tr><th>OS</th><td>{{ device.os or "-" }}</td></tr>
+          <tr><th>Arch</th><td>{{ device.arch or "-" }}</td></tr>
+          <tr><th>Agent</th><td>{{ device.agent_version or "-" }}</td></tr>
+          <tr><th>IP</th><td>{{ device.ip_address or "-" }}</td></tr>
+          <tr><th>Last seen</th><td>{{ device.last_seen_at or "-" }}</td></tr>
+          <tr><th>CPU</th><td>{{ device.cpu_percent if device.cpu_percent is not none else "-" }}%</td></tr>
+          <tr><th>RAM</th><td>{{ device.ram_percent if device.ram_percent is not none else "-" }}%</td></tr>
+          <tr><th>Disk</th><td>{{ device.disk_percent if device.disk_percent is not none else "-" }}%</td></tr>
+          <tr><th>Uptime</th><td>{{ device.uptime_seconds if device.uptime_seconds is not none else "-" }} seconds</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card" style="grid-column: span 12;">
+      <div class="h2">Dispatch task</div>
+      <form method="post" action="/tasks/create">
+        <input type="hidden" name="device_id" value="{{ device.id }}" />
+        <div class="row">
+          <div class="col">
+            <label class="help">Kind</label>
+            <select class="select" name="kind">
+              <option value="shell">shell</option>
+              <option value="powershell">powershell</option>
+              <option value="python">python</option>
+              <option value="url">url</option>
+            </select>
+          </div>
+          <div class="col">
+            <label class="help">Timeout (seconds)</label>
+            <input class="input" name="timeout_seconds" type="number" value="120" min="5" max="3600" />
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <div class="col">
+            <label class="help">Command</label>
+            <textarea class="textarea" name="command" placeholder="Example: uptime"></textarea>
+            <div class="help" style="margin-top:8px;">Agents poll every ~30 seconds in this alpha.</div>
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <button class="btn primary" type="submit">Queue task</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card" style="grid-column: span 7;">
+      <div class="h2">Recent tasks (device)</div>
+      <table class="table">
+        <thead>
+          <tr><th>When</th><th>Status</th><th>Kind</th><th>Exit</th></tr>
+        </thead>
+        <tbody>
+          {% for t in tasks %}
+          <tr>
+            <td>{{ t.created_at }}</td>
+            <td>{{ t.status }}</td>
+            <td>{{ t.kind }}</td>
+            <td>{{ t.exit_code if t.exit_code is not none else "-" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if tasks|length > 0 %}
+      <div class="help" style="margin-top:10px;">Latest output:</div>
+      <div class="code" style="margin-top:8px;">{{ tasks[0].output or "" }}</div>
+      {% endif %}
+    </div>
+
+    <div class="card" style="grid-column: span 5;">
+      <div class="h2">Alerts (device)</div>
+      <table class="table">
+        <thead>
+          <tr><th>When</th><th>Severity</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for a in alerts %}
+          <tr>
+            <td>{{ a.created_at }}</td>
+            <td>
+              {% if a.severity == "critical" %}<span class="badge bad">Critical</span>
+              {% elif a.severity == "warning" %}<span class="badge warn">Warning</span>
+              {% else %}<span class="badge">Info</span>{% endif %}
+              <div class="help">{{ a.title }}</div>
+            </td>
+            <td>
+              {% if not a.is_resolved %}
+              <form method="post" action="/alerts/{{ a.id }}/resolve">
+                <button class="btn small" type="submit">Resolve</button>
+              </form>
+              {% else %}<span class="help">Resolved</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+{% endblock %}
