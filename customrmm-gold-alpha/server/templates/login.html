@@ -1,11 +1,25 @@
 <!DOCTYPE html>
 <html>
+<head>
+  <title>Nexivo RMM</title>
+  <link rel="stylesheet" href="/static/nexivo.css">
+</head>
 <body>
-<h2>RMM Login</h2>
-<form method="post" action="/login">
-<input name="username" placeholder="Username">
-<input type="password" name="password" placeholder="Password">
-<button>Login</button>
-</form>
+  <div class="container">
+    <div class="panel">
+      <h1>Nexivo RMM</h1>
+      <div class="subtitle">Secure remote monitoring platform</div>
+
+      <form method="post" action="/login">
+        <label>Username</label>
+        <input name="username" required>
+
+        <label>Password</label>
+        <input type="password" name="password" required>
+
+        <button type="submit">Sign in</button>
+      </form>
+    </div>
+  </div>
 </body>
 </html>
