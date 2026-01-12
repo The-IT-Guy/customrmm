@@ -1,0 +1,10 @@
+[Unit]
+Description=CustomRMM Agent
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/env python3 /opt/customrmm-agent/agent.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
