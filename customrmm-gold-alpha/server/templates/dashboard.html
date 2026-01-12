@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<body>
+<h2>RMM Dashboard</h2>
+<table border="1">
+<tr><th>Host</th><th>OS</th><th>IP</th><th>Status</th></tr>
+{% for a in agents %}
+<tr>
+<td>{{a[0]}}</td>
+<td>{{a[1]}}</td>
+<td>{{a[2]}}</td>
+<td>{% if now - a[3] < 120 %}ONLINE{% else %}OFFLINE{% endif %}</td>
+</tr>
+{% endfor %}
+</table>
+</body>
+</html>

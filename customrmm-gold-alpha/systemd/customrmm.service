@@ -1,0 +1,13 @@
+[Unit]
+Description=Custom RMM Server
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/customrmm
+ExecStart=/opt/customrmm/venv/bin/uvicorn server.main:app --host 0.0.0.0 --port 8000
+Restart=always
+User=root
+EnvironmentFile=/etc/customrmm.env
+
+[Install]
+WantedBy=multi-user.target
