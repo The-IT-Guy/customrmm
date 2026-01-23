@@ -1,0 +1,8 @@
+<html><body><h2>Nexivo RMM</h2>
+{% if alerts %}<div>Offline devices detected</div>{% endif %}
+<table>
+<tr><th>Host</th><th>Status</th></tr>
+{% for d in devices %}
+<tr><td>{{ d.hostname }}</td><td>{{ 'Online' if d.online else 'Offline' }}</td></tr>
+{% endfor %}
+</table></body></html>
